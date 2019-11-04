@@ -46,6 +46,14 @@ public final class ErrorHandlingAction {
         defaultValue = "400")
     private Integer statusCode;
 
+    public RedeliveryPolicy redeliveryPolicy() {
+        RedeliveryPolicy redeliveryPolicy = new RedeliveryPolicy();
+        redeliveryPolicy.setMaximumRedeliveries(2);
+	    redeliveryPolicy.setMaximumRedeliveryDelay(1000);
+	    redeliveryPolicy.setRedeliveryDelay(1000);
+	    return redeliveryPolicy;
+	}
+	
     public ErrorHandlingAction(final CamelContext context) {
         final OnExceptionDefinition onException = new OnExceptionDefinition(Throwable.class).handled(true);
 
@@ -53,7 +61,9 @@ public final class ErrorHandlingAction {
         builder.setExceptionPolicyStrategy((exceptionPolicies, exchange, exception) -> onException);
         builder.setOnExceptionOccurred(ErrorHandlingAction::handleErrors);
         builder.logHandled(true);
-
+        builder.setRedeliveryPolicy(redeliveryPolicy());
+        builder.setDeadLetterUri("amqp:queue:DLQ");
+        
         context.getRouteDefinitions().forEach(route -> route.setErrorHandlerBuilder(builder));
     }
 
