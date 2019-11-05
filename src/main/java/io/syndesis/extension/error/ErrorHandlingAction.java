@@ -23,8 +23,11 @@ import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Handler;
 import org.apache.camel.Message;
-import org.apache.camel.builder.DefaultErrorHandlerBuilder;
+import org.apache.camel.builder.DeadLetterChannelBuilder;
 import org.apache.camel.model.OnExceptionDefinition;
+import org.apache.camel.processor.RedeliveryPolicy;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 @Action(
     id = "error-handler",
@@ -34,6 +37,8 @@ import org.apache.camel.model.OnExceptionDefinition;
     inputDataShape = @DataShape(kind = "none"),
     outputDataShape = @DataShape(kind = "none"))
 public final class ErrorHandlingAction {
+
+    private static Log log = LogFactory.getLog(ErrorHandlingAction.class);
 
     static final String STATUS_CODE = ErrorHandlingAction.class.getName() + ".statusCode";
 
@@ -45,24 +50,29 @@ public final class ErrorHandlingAction {
         required = true,
         defaultValue = "400")
     private Integer statusCode;
+    
+    private final static Integer MAXIMUM_REDELIVERY=2;
+    private final static Integer MAXIMUM_REDELIVERY_DELAY=2;
+    private final static String DEAD_LETTER_ADDRESS="amqp-amqp-0-0://queue:DLQ";
 
     public RedeliveryPolicy redeliveryPolicy() {
         RedeliveryPolicy redeliveryPolicy = new RedeliveryPolicy();
-        redeliveryPolicy.setMaximumRedeliveries(2);
-	    redeliveryPolicy.setMaximumRedeliveryDelay(1000);
-	    redeliveryPolicy.setRedeliveryDelay(1000);
+        redeliveryPolicy.setMaximumRedeliveries(MAXIMUM_REDELIVERY);
+	    redeliveryPolicy.setMaximumRedeliveryDelay(MAXIMUM_REDELIVERY_DELAY);
+        redeliveryPolicy.setRedeliveryDelay(MAXIMUM_REDELIVERY_DELAY);
 	    return redeliveryPolicy;
 	}
 	
     public ErrorHandlingAction(final CamelContext context) {
+        System.out.println("ErrorHandlingAction --> Version 5.0");
         final OnExceptionDefinition onException = new OnExceptionDefinition(Throwable.class).handled(true);
 
-        final DefaultErrorHandlerBuilder builder = new DefaultErrorHandlerBuilder();
+        final DeadLetterChannelBuilder builder = new DeadLetterChannelBuilder();
         builder.setExceptionPolicyStrategy((exceptionPolicies, exchange, exception) -> onException);
         builder.setOnExceptionOccurred(ErrorHandlingAction::handleErrors);
         builder.logHandled(true);
         builder.setRedeliveryPolicy(redeliveryPolicy());
-        builder.setDeadLetterUri("amqp:queue:DLQ");
+        builder.setDeadLetterUri(DEAD_LETTER_ADDRESS);
         
         context.getRouteDefinitions().forEach(route -> route.setErrorHandlerBuilder(builder));
     }
@@ -78,7 +88,9 @@ public final class ErrorHandlingAction {
     }
 
     static void handleErrors(final Exchange exchange) {
+        System.out.println("Caneta azul, azul caneta 5.0");
         final Message in = exchange.getIn();
+        log.info("Retry count: "+in.getHeader(Exchange.REDELIVERY_COUNTER));
         final Integer statusCode = in.getHeader(STATUS_CODE, Integer.class);
         if (statusCode == null) {
             exchange.setProperty(Exchange.ERRORHANDLER_HANDLED, Boolean.FALSE);
