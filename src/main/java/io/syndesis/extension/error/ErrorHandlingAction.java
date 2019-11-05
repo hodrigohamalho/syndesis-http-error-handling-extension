@@ -88,7 +88,6 @@ public final class ErrorHandlingAction {
     }
 
     static void handleErrors(final Exchange exchange) {
-        System.out.println("Caneta azul, azul caneta 5.0");
         final Message in = exchange.getIn();
         log.info("Retry count: "+in.getHeader(Exchange.REDELIVERY_COUNTER));
         final Integer statusCode = in.getHeader(STATUS_CODE, Integer.class);
